@@ -1,1 +1,0 @@
- G:\\Projects_Cline\\vagent\\vagent\\.dart_tool\\flutter_build\\eee84d72cdebe244e959bad32e872f59\\native_assets.json: 
