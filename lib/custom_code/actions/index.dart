@@ -4,3 +4,4 @@ export 'fetch_speech_and_play.dart' show fetchSpeechAndPlay;
 export 'generate_session_i_d.dart' show generateSessionID;
 export 'interrupt_speech.dart' show interruptSpeech;
 export 'validate_settings.dart' show validateSettings;
+export 'test_webhook_response.dart' show testWebhookResponse;

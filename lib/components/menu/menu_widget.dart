@@ -1,6 +1,7 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import '/pages/test_page/test_page_widget.dart';
 import 'dart:async';
 import '/custom_code/actions/index.dart' as actions;
 import 'package:flutter/material.dart';
@@ -154,6 +155,38 @@ class _MenuWidgetState extends State<MenuWidget> {
                   text: 'View Source Code',
                   icon: const FaIcon(
                     FontAwesomeIcons.github,
+                    size: 16.0,
+                  ),
+                  options: FFButtonOptions(
+                    width: MediaQuery.sizeOf(context).width * 1.0,
+                    height: 40.0,
+                    padding:
+                        const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+                    iconPadding:
+                        const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                    color: FlutterFlowTheme.of(context).secondaryText,
+                    textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                          fontFamily: 'Figtree',
+                          color: Colors.white,
+                          letterSpacing: 0.0,
+                        ),
+                    elevation: 0.0,
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                FFButtonWidget(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => 
+                          TestPageWidget(),
+                      ),
+                    );
+                  },
+                  text: 'Test Webhook',
+                  icon: const FaIcon(
+                    FontAwesomeIcons.vial,
                     size: 16.0,
                   ),
                   options: FFButtonOptions(

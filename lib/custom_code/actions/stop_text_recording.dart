@@ -20,12 +20,28 @@ Future<dynamic> stopTextRecording() async {
   if (FFAppState().isRecording) {
     try {
       // Stop the recording
+      final path = FFAppState().audioRecorderPath;
       await _audioRecorder.stop();
       print('Stopped audio recording');
 
-      if (FFAppState().audioRecorderPath.isNotEmpty) {
-        final file = File(FFAppState().audioRecorderPath);
+      if (path.isNotEmpty) {
+        final file = File(path);
+        
+        // Check if file exists
+        if (!await file.exists()) {
+          print('Audio file does not exist at path: $path');
+          FFAppState().speechToTextResponse = "";
+          return {'success': false, 'message': 'Audio file not found'};
+        }
+        
         final bytes = await file.readAsBytes();
+        
+        // Check if file has content
+        if (bytes.isEmpty) {
+          print('Audio file is empty');
+          FFAppState().speechToTextResponse = "";
+          return {'success': false, 'message': 'Audio file is empty'};
+        }
 
         final apiKey = FFAppState().apiKey;
         final request = http.MultipartRequest(
@@ -34,16 +50,29 @@ Future<dynamic> stopTextRecording() async {
         );
         request.headers['Authorization'] = 'Bearer $apiKey';
         request.fields['model'] = 'whisper-1';
+        
+        // Get file extension from path
+        final fileExtension = path.split('.').last.toLowerCase();
+        
+        // Verify file extension is supported by Whisper API
+        final supportedFormats = ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'];
+        if (!supportedFormats.contains(fileExtension)) {
+          print('Warning: File extension $fileExtension may not be supported by Whisper API');
+          print('Supported formats are: $supportedFormats');
+        }
+        
         request.files.add(http.MultipartFile.fromBytes(
           'file',
           bytes,
-          filename: 'audio.m4a',
+          filename: 'audio.$fileExtension',
         ));
 
-        final streamedResponse = await request.send();
-        final response = await http.Response.fromStream(streamedResponse);
-
+        print('Sending file with extension .$fileExtension and size ${bytes.length} bytes');
+        
         try {
+          final streamedResponse = await request.send();
+          final response = await http.Response.fromStream(streamedResponse);
+
           if (response.statusCode == 200) {
             final jsonResponse = json.decode(response.body);
             final transcription =
@@ -52,20 +81,33 @@ Future<dynamic> stopTextRecording() async {
             print('Transcription: $transcription');
             return {'success': true, 'message': ''};
           } else {
-            final errorJSON = json.decode(response.body);
             String errorMsg = 'Unknown error occurred';
-            if (errorJSON is Map && errorJSON.containsKey('error')) {
-              errorMsg = errorJSON['error']['message'] ?? errorMsg;
+            try {
+              final errorJSON = json.decode(response.body);
+              if (errorJSON is Map && errorJSON.containsKey('error')) {
+                errorMsg = errorJSON['error']['message'] ?? errorMsg;
+              }
+            } catch (e) {
+              errorMsg = 'Failed to parse error response: ${response.body}';
             }
-            print('Error: ${response.statusCode} - ${errorMsg}');
+            print('Error: ${response.statusCode} - $errorMsg');
             FFAppState().speechToTextResponse = "";
             return {
               'success': false,
-              'message': 'Transcription failed: ${errorMsg}'
+              'message': 'Transcription failed: $errorMsg'
             };
           }
+        } catch (e) {
+          print('Network error during transcription: $e');
+          FFAppState().speechToTextResponse = "";
+          return {'success': false, 'message': 'Network error: $e'};
         } finally {
-          await file.delete();
+          try {
+            await file.delete();
+            print('Deleted temporary audio file');
+          } catch (e) {
+            print('Failed to delete temporary file: $e');
+          }
         }
       } else {
         FFAppState().speechToTextResponse = "";
@@ -82,5 +124,6 @@ Future<dynamic> stopTextRecording() async {
   }
   return {'success': false, 'message': 'Not recording'};
 }
+
 // Set your action name, define your arguments and return parameter,
 // and then add the boilerplate code using the green button on the right!

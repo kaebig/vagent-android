@@ -8,7 +8,9 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_timer.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'dart:async';
+import 'dart:math';
 import '/custom_code/actions/index.dart' as actions;
+import '/custom_code/actions/fetch_speech_and_play.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -325,103 +327,260 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                   curve: Curves.ease,
                                                 );
                                                 // Call webhook
-                                                _model.getResponseAPICall =
-                                                    await GetAgentResponseCall
-                                                        .call(
-                                                  prompt: FFAppState()
-                                                      .speechToTextResponse,
-                                                  webhookURL:
-                                                      FFAppState().webhookURL,
-                                                  webhookAuthValue: FFAppState()
-                                                      .webhookAuthValue,
-                                                  sessionID:
-                                                      FFAppState().sessionID,
-                                                );
+                                                print('Calling webhook with prompt: ${FFAppState().speechToTextResponse}');
+                                                try {
+                                                  _model.getResponseAPICall =
+                                                      await GetAgentResponseCall
+                                                          .call(
+                                                    prompt: FFAppState()
+                                                        .speechToTextResponse,
+                                                    webhookURL:
+                                                        FFAppState().webhookURL,
+                                                    webhookAuthValue: FFAppState()
+                                                        .webhookAuthValue,
+                                                    sessionID:
+                                                        FFAppState().sessionID,
+                                                  );
 
-                                                shouldSetState = true;
-                                                if ((_model.getResponseAPICall
-                                                        ?.succeeded ??
-                                                    true)) {
-                                                  // Run TTS for webhook response
-                                                  _model.speechDuration =
-                                                      await actions
-                                                          .fetchSpeechAndPlay(
-                                                    GetAgentResponseCall.speech(
-                                                      (_model.getResponseAPICall
-                                                              ?.jsonBody ??
-                                                          ''),
-                                                    ).toString(),
-                                                    FFAppState().apiKey,
-                                                  );
                                                   shouldSetState = true;
-                                                  // Set timer value (playback length)
-                                                  FFAppState().timerValue =
-                                                      _model.speechDuration!;
-                                                  FFAppState()
-                                                      .speechToTextResponse = '';
-                                                  safeSetState(() {});
-                                                  // Transcription started
+                                                  print('Webhook call completed. Success: ${_model.getResponseAPICall?.succeeded}');
+                                                  
+                                                  if (_model.getResponseAPICall == null) {
+                                                    print('Error: API call response is null');
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          'Error: No response from webhook',
+                                                          style: TextStyle(
+                                                            color: FlutterFlowTheme.of(context).primaryText,
+                                                          ),
+                                                        ),
+                                                        duration: const Duration(milliseconds: 5000),
+                                                        backgroundColor: FlutterFlowTheme.of(context).error,
+                                                      ),
+                                                    );
+                                                    return;
+                                                  }
+                                                  
+                                                  if (_model.getResponseAPICall!.succeeded) {
+                                                    // Extract text and speech from response
+                                                    final responseText = GetAgentResponseCall.text(
+                                                      _model.getResponseAPICall!.jsonBody,
+                                                    );
+                                                    final responseSpeech = GetAgentResponseCall.speech(
+                                                      _model.getResponseAPICall!.jsonBody,
+                                                    );
+                                                    
+                                                    print('Response text: $responseText');
+                                                    print('Response speech: $responseSpeech');
+                                                    
+                                                    if (responseText == null || responseSpeech == null) {
+                                                      print('Error: Response text or speech is null');
+                                                      print('Response body: ${_model.getResponseAPICall!.bodyText}');
+                                                      
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                            'Error: Invalid response format. Expected "response.text" and "response.speech" fields.',
+                                                            style: TextStyle(
+                                                              color: FlutterFlowTheme.of(context).primaryText,
+                                                            ),
+                                                          ),
+                                                          duration: const Duration(milliseconds: 5000),
+                                                          backgroundColor: FlutterFlowTheme.of(context).error,
+                                                        ),
+                                                      );
+                                                      return;
+                                                    }
+                                                    
+                                                    // Add grey bubble to conversation with the response text
+                                                    FFAppState().addToMessageHistory(
+                                                      MessageStruct(
+                                                        text: responseText.toString(),
+                                                      )
+                                                    );
+                                                    safeSetState(() {});
+                                                    
+                                                    // Wait for UI elements
+                                                    await Future.delayed(
+                                                      const Duration(milliseconds: 100)
+                                                    );
+                                                    
+                                                    // Scroll bubbles
+                                                    await _model.listViewController?.animateTo(
+                                                      _model.listViewController!.position.maxScrollExtent,
+                                                      duration: const Duration(milliseconds: 100),
+                                                      curve: Curves.ease,
+                                                    );
+                                                    
+                                                    // Calculate wave effect duration based on speech length
+                                                    int waveDuration = 6000; // Base duration: 6 seconds for messages under 60 chars
+                                                    
+                                                    // Get the message length from the speech field (for calculating duration)
+                                                    final speechLength = responseSpeech.toString().length;
+                                                    print('Speech length: $speechLength characters');
+                                                    
+                                                    // For every 60 characters, show wave effect for 6 seconds
+                                                    // For every additional 12 characters beyond 60, add 1 extra second
+                                                    if (speechLength > 60) {
+                                                      final additionalChars = speechLength - 60;
+                                                      final additionalSeconds = (additionalChars / 12).ceil();
+                                                      waveDuration += additionalSeconds * 1000;
+                                                    }
+                                                    
+                                                    // Set a maximum duration to ensure the wave effect stops
+                                                    waveDuration = min(waveDuration, 60000); // Maximum 60 seconds
+                                                    
+                                                    print('Calculated wave duration: $waveDuration ms');
+                                                    
+                                                    // Keep spinning for 6 seconds after receiving JSON response
+                                                    print('Keeping spinning effect for 6 seconds');
+                                                    await Future.delayed(const Duration(seconds: 6));
+                                                    
+                                                    // Stop the spinning circle and start the wave effect
+                                                    _model.isTranscribing = false;
+                                                    
+                                                    // Run TTS for webhook response
+                                                    try {
+                                                      print('Starting speech playback and wave effect');
+                                                      
+                                                      // Reset the timer controller
+                                                      _model.timerController.onResetTimer();
+                                                      
+                                                      // Set timer value to calculated duration
+                                                      FFAppState().timerValue = waveDuration;
+                                                      FFAppState().speechToTextResponse = '';
+                                                      
+                                                      // Show waveform
+                                                      _model.showWaveform = true;
+                                                      safeSetState(() {});
+                                                      
+                                                      // Start timer
+                                                      _model.timerController.onStartTimer();
+                                                      
+                                                      // Also set a backup timer to ensure the wave effect stops
+                                                      Future.delayed(Duration(milliseconds: waveDuration + 1000), () {
+                                                        if (_model.showWaveform) {
+                                                          print('Backup timer stopping wave effect');
+                                                          _model.showWaveform = false;
+                                                          _model.timerController.onResetTimer();
+                                                          safeSetState(() {});
+                                                        }
+                                                      });
+                                                      
+                                                      // Start audio playback in background using the speech field
+                                                      unawaited(
+                                                        () async {
+                                                          try {
+                                                            await actions.fetchSpeechAndPlay(
+                                                              responseSpeech.toString(), // Use speech field for audio
+                                                              FFAppState().apiKey,
+                                                            );
+                                                            
+                                                            // After audio playback completes, ensure wave effect stops
+                                                            if (_model.showWaveform) {
+                                                              print('Audio playback completed, stopping wave effect');
+                                                              _model.showWaveform = false;
+                                                              _model.timerController.onResetTimer();
+                                                              safeSetState(() {});
+                                                            }
+                                                          } catch (e) {
+                                                            print('Error playing speech: $e');
+                                                            
+                                                            // If there's an error, also ensure wave effect stops
+                                                            if (_model.showWaveform) {
+                                                              print('Error in audio playback, stopping wave effect');
+                                                              _model.showWaveform = false;
+                                                              _model.timerController.onResetTimer();
+                                                              safeSetState(() {});
+                                                            }
+                                                          }
+                                                        }(),
+                                                      );
+                                                    } catch (e) {
+                                                      print('Error playing speech: $e');
+                                                      // Still add the text bubble even if speech fails
+                                                      _model.isTranscribing = false;
+                                                      safeSetState(() {});
+                                                      
+                                                      // Add grey bubble to conversation
+                                                      FFAppState()
+                                                          .addToMessageHistory(
+                                                              MessageStruct(
+                                                        text: responseText.toString(),
+                                                      ));
+                                                      safeSetState(() {});
+                                                      
+                                                      // Show error message
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                            'Error playing speech: $e',
+                                                            style: TextStyle(
+                                                              color: FlutterFlowTheme.of(context).primaryText,
+                                                            ),
+                                                          ),
+                                                          duration: const Duration(milliseconds: 5000),
+                                                          backgroundColor: FlutterFlowTheme.of(context).error,
+                                                        ),
+                                                      );
+                                                      
+                                                      // Scroll bubbles
+                                                      await _model
+                                                          .listViewController
+                                                          ?.animateTo(
+                                                        _model
+                                                            .listViewController!
+                                                            .position
+                                                            .maxScrollExtent,
+                                                        duration: const Duration(
+                                                            milliseconds: 100),
+                                                        curve: Curves.ease,
+                                                      );
+                                                    }
+                                                  } else {
+                                                    // Display error message in UI
+                                                    print('Webhook call failed: ${_model.getResponseAPICall?.statusCode}');
+                                                    print('Error response: ${_model.getResponseAPICall?.bodyText}');
+                                                    
+                                                    _model.isTranscribing = false;
+                                                    safeSetState(() {});
+                                                    
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          'Webhook error (${_model.getResponseAPICall?.statusCode}): ${_model.getResponseAPICall?.bodyText}',
+                                                          style: TextStyle(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primaryText,
+                                                          ),
+                                                        ),
+                                                        duration: const Duration(
+                                                            milliseconds: 5000),
+                                                        backgroundColor:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .error,
+                                                      ),
+                                                    );
+                                                  }
+                                                } catch (e) {
+                                                  print('Exception during webhook call: $e');
                                                   _model.isTranscribing = false;
-                                                  // Show waveform
-                                                  _model.showWaveform = true;
                                                   safeSetState(() {});
-                                                  // Wait for UI elements (timer)
-                                                  await Future.delayed(
-                                                      const Duration(
-                                                          milliseconds: 100));
-                                                  // Start timer
-                                                  _model.timerController
-                                                      .onStartTimer();
-                                                  // Add grey bubble to conversation
-                                                  FFAppState()
-                                                      .addToMessageHistory(
-                                                          MessageStruct(
-                                                    text: GetAgentResponseCall
-                                                        .text(
-                                                      (_model.getResponseAPICall
-                                                              ?.jsonBody ??
-                                                          ''),
-                                                    ).toString(),
-                                                  ));
-                                                  safeSetState(() {});
-                                                  // Wait for UI elements
-                                                  await Future.delayed(
-                                                      const Duration(
-                                                          milliseconds: 100));
-                                                  // Scroll bubbles
-                                                  await _model
-                                                      .listViewController
-                                                      ?.animateTo(
-                                                    _model
-                                                        .listViewController!
-                                                        .position
-                                                        .maxScrollExtent,
-                                                    duration: const Duration(
-                                                        milliseconds: 100),
-                                                    curve: Curves.ease,
-                                                  );
-                                                } else {
-                                                  // Display error message in UI
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
+                                                  
+                                                  ScaffoldMessenger.of(context).showSnackBar(
                                                     SnackBar(
                                                       content: Text(
-                                                        (_model.getResponseAPICall
-                                                                    ?.jsonBody ??
-                                                                '')
-                                                            .toString(),
+                                                        'Error: $e',
                                                         style: TextStyle(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
+                                                          color: FlutterFlowTheme.of(context).primaryText,
                                                         ),
                                                       ),
-                                                      duration: const Duration(
-                                                          milliseconds: 5000),
-                                                      backgroundColor:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
+                                                      duration: const Duration(milliseconds: 5000),
+                                                      backgroundColor: FlutterFlowTheme.of(context).error,
                                                     ),
                                                   );
                                                 }

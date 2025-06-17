@@ -32,15 +32,24 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     compileSdkVersion 34
+    namespace "io.vagent.app"
     
-
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
-    lintOptions {
-        disable 'InvalidPackage'
-        checkReleaseBuilds false
+    lint {
+        disable += ['InvalidPackage']
+        checkReleaseBuilds = false
+    }
+    
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
     defaultConfig {
@@ -50,6 +59,11 @@ android {
         targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        
+        // Add support for native audio libraries
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
     }
 
    signingConfigs {
@@ -76,4 +90,7 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10"
+    // Add explicit dependency for audio recording
+    implementation 'androidx.media:media:1.6.0'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.18.7'
 }
